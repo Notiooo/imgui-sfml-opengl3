@@ -26,7 +26,7 @@ if(IMGUI_SFML_FIND_SFML)
   if(NOT BUILD_SHARED_LIBS)
     set(SFML_STATIC_LIBRARIES ON)
   endif()
-  find_package(SFML 2.5 REQUIRED COMPONENTS graphics)
+  find_package(SFML 2.5 REQUIRED COMPONENTS window system)
 endif()
 
 # ImGui does not provide native support for CMakeLists, workaround for now to have
@@ -69,7 +69,7 @@ target_include_directories(ImGui-SFML PUBLIC
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_compile_features(ImGui-SFML PUBLIC cxx_std_11)
-target_link_libraries(ImGui-SFML PUBLIC sfml-graphics OpenGL::GL)
+target_link_libraries(ImGui-SFML PUBLIC sfml-window sfml-system OpenGL::GL)
 if(WIN32 AND MINGW)
   target_link_libraries(ImGui-SFML PUBLIC imm32)
 endif()

@@ -68,7 +68,7 @@ Not recommended, as they're not maintained officially. Tend to lag behind and st
 Using ImGui-SFML in your code
 ---
 
-- Call `ImGui::SFML::Init` and pass your `sf::Window` + `sf::RenderTarget` or `sf::RenderWindow` there. You can create your font atlas and pass the pointer in Init too, otherwise the default internal font atlas will be created for you. Do this for each window you want to draw ImGui on.
+- Call `ImGui::SFML::Init` and pass your `sf::Window` there. You can create your font atlas and pass the pointer in Init too, otherwise the default internal font atlas will be created for you. Do this for each window you want to draw ImGui on.
 - For each iteration of a game loop:
     - Poll and process events:
 
@@ -99,7 +99,7 @@ See example file [here](https://github.com/SFML/imgui-sfml/blob/master/examples/
 #include "imgui.h"
 #include "imgui-SFML.h"
 
-#include <SFML/Window.hpp> // Core profile does not support Graphic module :)
+#include <SFML/Window/Window.hpp> // Core profile does not support Graphic module :)
 #include <SFML/System/Clock.hpp>
 #include <SFML/Window/Event.hpp>
 
@@ -112,7 +112,7 @@ int main() {
     settings.stencilBits = 8;
     settings.attributeFlags = sf::ContextSettings::Core;
     
-    sf::RenderWindow window(sf::VideoMode(640, 480), "ImGui + SFML + OpenGL3 = <3", settings);
+    sf::Window window(sf::VideoMode(640, 480), "ImGui + SFML + OpenGL3 = <3", settings);
     window.setFramerateLimit(60);
     ImGui::SFML::Init(window);
 
@@ -153,37 +153,6 @@ Glsl versions how-to
 ---
 Default `#version 330` is loaded if you don't pass different one in `ImGui::SFML::Init`. Call `ImGui::SFML::Init(window, glsl_version);` if you want different one.
 
-
-Fonts how-to
----
-
-Default font is loaded if you don't pass `false` in `ImGui::SFML::Init`. Call `ImGui::SFML::Init(window, false);` if you don't want default font to be loaded.
-
-* Load your fonts like this:
-
-```cpp
-IO.Fonts->Clear(); // clear fonts if you loaded some before (even if only default one was loaded)
-// IO.Fonts->AddFontDefault(); // this will load default font as well
-IO.Fonts->AddFontFromFileTTF("font1.ttf", 8.f);
-IO.Fonts->AddFontFromFileTTF("font2.ttf", 12.f);
-
-ImGui::SFML::UpdateFontTexture(); // important call: updates font texture
-```
-
-* And use them like this:
-
-```cpp
-ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-ImGui::Button("Look at this pretty button");
-ImGui::PopFont();
-
-ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[1]);
-ImGui::TextUnformatted("IT WORKS!");
-ImGui::PopFont();
-```
-
-The first loaded font is treated as the default one and doesn't need to be pushed with `ImGui::PushFont`.
-
 Multiple windows
 ----------------
 
@@ -192,7 +161,7 @@ See `examples/multiple_windows` to see how you can create multiple SFML and run 
 - Don't forget to run `ImGui::SFML::Init(const sf::Window&)` for each window you create. Same goes for `ImGui::SFML::Shutdown(const sf::Window&)`
 - Instead of calling `ImGui::SFML::ProcessEvent(sf::Event&)`, you need to call `ImGui::SFML::ProcessEvent(const sf::Window&, const sf::Event&)` overload for each window you create
 - Call `ImGui::SFML::SetCurrentWindow` before calling any `ImGui` functions (e.g. `ImGui::Begin`, `ImGui::Button` etc.)
-- Either call `ImGui::Render(sf::RenderWindow&)` overload for each window or manually do this:
+- Either call `ImGui::Render(sf::Window&)` overload for each window or manually do this:
     ```cpp
     SetCurrentWindow(window);
     ... // your custom rendering
@@ -203,49 +172,6 @@ See `examples/multiple_windows` to see how you can create multiple SFML and run 
     ImGui::Render();
     ```
 - When closing everything: don't forget to close all windows using SFML's `sf::Window::Close` and then call `ImGui::SFML::Shutdown` to remote all ImGui-SFML window contexts and other data.
-
-SFML related ImGui overloads / new widgets
----
-
-There are some useful overloads implemented for SFML objects (see `imgui-SFML.h` for other overloads):
-
-```cpp
-ImGui::Image(const sf::Sprite& sprite);
-ImGui::Image(const sf::Texture& texture);
-ImGui::Image(const sf::RenderTexture& texture);
-
-ImGui::ImageButton(const sf::Sprite& sprite);
-ImGui::ImageButton(const sf::Texture& texture);
-ImGui::ImageButton(const sf::RenderTexture& texture);
-```
-
-### But please remember that Core Profile does not support SFML Graphics module.
-
-A note about sf::RenderTexture
----
-
-`sf::RenderTexture`'s texture is stored with pixels flipped upside down. To display it properly when drawing `ImGui::Image` or `ImGui::ImageButton`, use overloads for `sf::RenderTexture`:
-
-```cpp
-sf::RenderTexture texture;
-sf::Sprite sprite(texture.getTexture());
-ImGui::Image(texture);              // OK
-ImGui::Image(sprite);               // NOT OK
-ImGui::Image(texture.getTexture()); // NOT OK
-```
-
-If you want to draw only a part of `sf::RenderTexture` and you're trying to use `sf::Sprite` the texture will be displayed upside-down. To prevent this, you can do this:
-
-```cpp
-// make a normal sf::Texture from sf::RenderTexture's flipped texture
-sf::Texture texture(renderTexture.getTexture());
-
-sf::Sprite sprite(texture);
-ImGui::Image(sprite); // the texture is displayed properly
-```
-
-For more notes see [this issue](https://github.com/SFML/imgui-sfml/issues/35).
-### But please remember that Core Profile does not support SFML Graphics module.
 
 Mouse cursors
 ---

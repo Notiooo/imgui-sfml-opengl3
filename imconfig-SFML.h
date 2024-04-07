@@ -1,6 +1,5 @@
 // Add this to your imconfig.h
 
-#include <SFML/Graphics/Color.hpp>
 #include <SFML/System/Vector2.hpp>
 
 #include <cstdint>
@@ -17,14 +16,4 @@
     template<typename T>                                             \
     operator sf::Vector2<T>() const {                                \
         return sf::Vector2<T>(static_cast<T>(x), static_cast<T>(y)); \
-    }
-
-#define IM_VEC4_CLASS_EXTRA                                                                       \
-    ImVec4(const sf::Color& c) : x(c.r / 255.f), y(c.g / 255.f), z(c.b / 255.f), w(c.a / 255.f) { \
-    }                                                                                             \
-    operator sf::Color() const {                                                                  \
-        return sf::Color(static_cast<std::uint8_t>(x * 255.f),                                    \
-                         static_cast<std::uint8_t>(y * 255.f),                                    \
-                         static_cast<std::uint8_t>(z * 255.f),                                    \
-                         static_cast<std::uint8_t>(w * 255.f));                                   \
     }

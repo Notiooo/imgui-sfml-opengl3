@@ -2,18 +2,22 @@
 
 #include "imgui-SFML.h" // for ImGui::SFML::* functions and SFML-specific overloads
 
-#include <SFML/Graphics/CircleShape.hpp>
-#include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Clock.hpp>
 #include <SFML/Window/Event.hpp>
+#include <SFML/Window/Window.hpp>
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode(640, 480), "ImGui + SFML = <3");
+    sf::ContextSettings settings;
+    settings.antialiasingLevel = 0;
+    settings.majorVersion = 3;
+    settings.minorVersion = 3;
+    settings.depthBits = 24;
+    settings.stencilBits = 8;
+    settings.attributeFlags = sf::ContextSettings::Core;
+
+    sf::Window window(sf::VideoMode(640, 480), "ImGui + SFML + OpenGL3 = <3", settings);
     window.setFramerateLimit(60);
     if (!ImGui::SFML::Init(window)) return -1;
-
-    sf::CircleShape shape(100.f);
-    shape.setFillColor(sf::Color::Green);
 
     sf::Clock deltaClock;
     while (window.isOpen()) {
@@ -35,7 +39,6 @@ int main() {
         ImGui::End();
 
         window.clear();
-        window.draw(shape);
         ImGui::SFML::Render(window);
         window.display();
     }

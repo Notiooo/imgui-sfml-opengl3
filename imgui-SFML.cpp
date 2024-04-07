@@ -3,12 +3,6 @@
 #include <backends/imgui_impl_opengl3.h>
 
 #include <SFML/Config.hpp>
-#include <SFML/Graphics/Color.hpp>
-#include <SFML/Graphics/RenderTarget.hpp>
-#include <SFML/Graphics/RenderTexture.hpp>
-#include <SFML/Graphics/RenderWindow.hpp>
-#include <SFML/Graphics/Sprite.hpp>
-#include <SFML/Graphics/Texture.hpp>
 #include <SFML/OpenGL.hpp>
 #include <SFML/Window/Clipboard.hpp>
 #include <SFML/Window/Cursor.hpp>
@@ -118,13 +112,6 @@ static_assert(sizeof(GLuint) <= sizeof(ImTextureID),
               "ImTextureID is not large enough to fit GLuint.");
 
 namespace {
-// various helper functions
-ImColor toImColor(sf::Color c);
-ImVec2 getTopLeftAbsolute(const sf::FloatRect& rect);
-ImVec2 getDownRightAbsolute(const sf::FloatRect& rect);
-
-ImTextureID convertGLTextureHandleToImTextureID(GLuint glTextureHandle);
-GLuint convertImTextureIDToGLTextureHandle(ImTextureID textureID);
 
 // Default mapping is XInput gamepad mapping
 void initDefaultJoystickMapping();
@@ -171,9 +158,6 @@ struct WindowContext {
     const sf::Window* window;
     ImGuiContext* imContext{ImGui::CreateContext()};
 
-    sf::Texture fontTexture; // internal font atlas which is used if user doesn't set a custom
-                             // sf::Texture.
-
     bool windowHasFocus;
     bool mouseMoved{false};
     bool mousePressed[3] = {false};
@@ -213,11 +197,11 @@ WindowContext* s_currWindowCtx = nullptr;
 
 namespace ImGui {
 namespace SFML {
-bool Init(sf::Window& window, const char* glsl_version, bool loadDefaultFont) {
-    return Init(window, sf::Vector2f(window.getSize()), glsl_version, loadDefaultFont);
+bool Init(sf::Window& window, const char* glsl_version) {
+    return Init(window, sf::Vector2f(window.getSize()), glsl_version);
 }
 
-bool Init(sf::Window& window, const sf::Vector2f& displaySize, const char* glsl_version, bool loadDefaultFont) {
+bool Init(sf::Window& window, const sf::Vector2f& displaySize, const char* glsl_version) {
     s_windowContexts.emplace_back(new WindowContext(&window));
 
     s_currWindowCtx = s_windowContexts.back().get();
@@ -252,11 +236,6 @@ bool Init(sf::Window& window, const sf::Vector2f& displaySize, const char* glsl_
     loadMouseCursor(ImGuiMouseCursor_ResizeNWSE, sf::Cursor::SizeTopLeftBottomRight);
     loadMouseCursor(ImGuiMouseCursor_Hand, sf::Cursor::Hand);
     ImGui_ImplOpenGL3_Init(glsl_version);
-    if (loadDefaultFont) {
-        // this will load default font automatically
-        // No need to call AddDefaultFont
-        return UpdateFontTexture();
-    }
 
     return true;
 }
@@ -444,9 +423,6 @@ void Update(const sf::Vector2i& mousePos, const sf::Vector2f& displaySize, sf::T
 #endif
 #endif
 
-    assert(io.Fonts->Fonts.Size > 0); // You forgot to create and set up font
-                                      // atlas (see createFontTexture)
-
     // gamepad navigation
     if ((io.ConfigFlags & ImGuiConfigFlags_NavEnableGamepad) &&
         s_currWindowCtx->joystickId != NULL_JOYSTICK_ID) {
@@ -503,34 +479,6 @@ void Shutdown() {
     s_currWindowCtx = nullptr;
     ImGui::SetCurrentContext(nullptr);
     s_windowContexts.clear();
-}
-
-bool UpdateFontTexture() {
-    assert(s_currWindowCtx);
-
-    ImGuiIO& io = ImGui::GetIO();
-    unsigned char* pixels = nullptr;
-    int width = 0;
-    int height = 0;
-
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-
-    sf::Texture& texture = s_currWindowCtx->fontTexture;
-    if (!texture.create(static_cast<unsigned>(width), static_cast<unsigned>(height))) {
-        return false;
-    }
-
-    texture.update(pixels);
-
-    ImTextureID texID = convertGLTextureHandleToImTextureID(texture.getNativeHandle());
-    io.Fonts->SetTexID(texID);
-
-    return true;
-}
-
-sf::Texture& GetFontTexture() {
-    assert(s_currWindowCtx);
-    return s_currWindowCtx->fontTexture;
 }
 
 void SetActiveJoystickId(unsigned int joystickId) {
@@ -650,161 +598,9 @@ void SetRTriggerAxis(sf::Joystick::Axis rTriggerAxis) {
 }
 
 } // end of namespace SFML
-
-/////////////// Image Overloads for sf::Texture
-
-void Image(const sf::Texture& texture, const sf::Color& tintColor, const sf::Color& borderColor) {
-    Image(texture, sf::Vector2f(texture.getSize()), tintColor, borderColor);
-}
-
-void Image(const sf::Texture& texture, const sf::Vector2f& size, const sf::Color& tintColor,
-           const sf::Color& borderColor) {
-    ImTextureID textureID = convertGLTextureHandleToImTextureID(texture.getNativeHandle());
-
-    ImGui::Image(textureID, ImVec2(size.x, size.y), ImVec2(0, 0), ImVec2(1, 1),
-                 toImColor(tintColor), toImColor(borderColor));
-}
-
-/////////////// Image Overloads for sf::RenderTexture
-void Image(const sf::RenderTexture& texture, const sf::Color& tintColor,
-           const sf::Color& borderColor) {
-    Image(texture, sf::Vector2f(texture.getSize()), tintColor, borderColor);
-}
-
-void Image(const sf::RenderTexture& texture, const sf::Vector2f& size, const sf::Color& tintColor,
-           const sf::Color& borderColor) {
-    ImTextureID textureID =
-        convertGLTextureHandleToImTextureID(texture.getTexture().getNativeHandle());
-
-    ImGui::Image(textureID, ImVec2(size.x, size.y), ImVec2(0, 1),
-                 ImVec2(1, 0), // flipped vertically, because textures in sf::RenderTexture are
-                               // stored this way
-                 toImColor(tintColor), toImColor(borderColor));
-}
-
-/////////////// Image Overloads for sf::Sprite
-
-void Image(const sf::Sprite& sprite, const sf::Color& tintColor, const sf::Color& borderColor) {
-    const sf::FloatRect bounds = sprite.getGlobalBounds();
-    Image(sprite, sf::Vector2f(bounds.width, bounds.height), tintColor, borderColor);
-}
-
-void Image(const sf::Sprite& sprite, const sf::Vector2f& size, const sf::Color& tintColor,
-           const sf::Color& borderColor) {
-    const sf::Texture* texturePtr = sprite.getTexture();
-    // sprite without texture cannot be drawn
-    if (!texturePtr) {
-        return;
-    }
-    const sf::Texture& texture = *texturePtr;
-    const sf::Vector2f textureSize(texture.getSize());
-    const sf::FloatRect textureRect(sprite.getTextureRect());
-    const ImVec2 uv0(textureRect.left / textureSize.x, textureRect.top / textureSize.y);
-    const ImVec2 uv1((textureRect.left + textureRect.width) / textureSize.x,
-                     (textureRect.top + textureRect.height) / textureSize.y);
-
-    ImTextureID textureID = convertGLTextureHandleToImTextureID(texture.getNativeHandle());
-
-    ImGui::Image(textureID, ImVec2(size.x, size.y), uv0, uv1, toImColor(tintColor),
-                 toImColor(borderColor));
-}
-
-/////////////// Image Button Overloads for sf::Texture
-
-bool ImageButton(const char* id, const sf::Texture& texture, const sf::Vector2f& size,
-                 const sf::Color& bgColor, const sf::Color& tintColor) {
-    ImTextureID textureID = convertGLTextureHandleToImTextureID(texture.getNativeHandle());
-
-    return ImGui::ImageButton(id, textureID, ImVec2(size.x, size.y), ImVec2(0, 0), ImVec2(1, 1),
-                              toImColor(bgColor), toImColor(tintColor));
-}
-
-/////////////// Image Button Overloads for sf::RenderTexture
-
-bool ImageButton(const char* id, const sf::RenderTexture& texture, const sf::Vector2f& size,
-                 const sf::Color& bgColor, const sf::Color& tintColor) {
-    ImTextureID textureID =
-        convertGLTextureHandleToImTextureID(texture.getTexture().getNativeHandle());
-
-    return ImGui::ImageButton(id, textureID, ImVec2(size.x, size.y), ImVec2(0, 1),
-                              ImVec2(1, 0), // flipped vertically, because textures in
-                                            // sf::RenderTexture are stored this way
-                              toImColor(bgColor), toImColor(tintColor));
-}
-
-/////////////// Image Button Overloads for sf::Sprite
-
-bool ImageButton(const char* id, const sf::Sprite& sprite, const sf::Vector2f& size,
-                 const sf::Color& bgColor, const sf::Color& tintColor) {
-    const sf::Texture* texturePtr = sprite.getTexture();
-    // sprite without texture cannot be drawn
-    if (!texturePtr) {
-        return false;
-    }
-    const sf::Texture& texture = *texturePtr;
-    const sf::Vector2f textureSize(texture.getSize());
-    const sf::FloatRect textureRect(sprite.getTextureRect());
-    const ImVec2 uv0(textureRect.left / textureSize.x, textureRect.top / textureSize.y);
-    const ImVec2 uv1((textureRect.left + textureRect.width) / textureSize.x,
-                     (textureRect.top + textureRect.height) / textureSize.y);
-
-    ImTextureID textureID = convertGLTextureHandleToImTextureID(texture.getNativeHandle());
-    return ImGui::ImageButton(id, textureID, ImVec2(size.x, size.y), uv0, uv1, toImColor(bgColor),
-                              toImColor(tintColor));
-}
-
-/////////////// Draw_list Overloads
-
-void DrawLine(const sf::Vector2f& a, const sf::Vector2f& b, const sf::Color& color,
-              float thickness) {
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    const ImVec2 pos = ImGui::GetCursorScreenPos();
-    draw_list->AddLine(ImVec2(a.x + pos.x, a.y + pos.y), ImVec2(b.x + pos.x, b.y + pos.y),
-                       ColorConvertFloat4ToU32(toImColor(color)), thickness);
-}
-
-void DrawRect(const sf::FloatRect& rect, const sf::Color& color, float rounding,
-              int rounding_corners, float thickness) {
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRect(getTopLeftAbsolute(rect), getDownRightAbsolute(rect),
-                       ColorConvertFloat4ToU32(toImColor(color)), rounding, rounding_corners,
-                       thickness);
-}
-
-void DrawRectFilled(const sf::FloatRect& rect, const sf::Color& color, float rounding,
-                    int rounding_corners) {
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRectFilled(getTopLeftAbsolute(rect), getDownRightAbsolute(rect),
-                             ColorConvertFloat4ToU32(toImColor(color)), rounding, rounding_corners);
-}
-
 } // end of namespace ImGui
 
 namespace {
-ImColor toImColor(sf::Color c) {
-    return {static_cast<int>(c.r), static_cast<int>(c.g), static_cast<int>(c.b),
-            static_cast<int>(c.a)};
-}
-ImVec2 getTopLeftAbsolute(const sf::FloatRect& rect) {
-    const ImVec2 pos = ImGui::GetCursorScreenPos();
-    return {rect.left + pos.x, rect.top + pos.y};
-}
-ImVec2 getDownRightAbsolute(const sf::FloatRect& rect) {
-    const ImVec2 pos = ImGui::GetCursorScreenPos();
-    return {rect.left + rect.width + pos.x, rect.top + rect.height + pos.y};
-}
-
-ImTextureID convertGLTextureHandleToImTextureID(GLuint glTextureHandle) {
-    ImTextureID textureID = nullptr;
-    std::memcpy(&textureID, &glTextureHandle, sizeof(GLuint));
-    return textureID;
-}
-GLuint convertImTextureIDToGLTextureHandle(ImTextureID textureID) {
-    GLuint glTextureHandle = 0;
-    std::memcpy(&glTextureHandle, &textureID, sizeof(GLuint));
-    return glTextureHandle;
-}
-
 unsigned int getConnectedJoystickId() {
     for (unsigned int i = 0; i < (unsigned int)sf::Joystick::Count; ++i) {
         if (sf::Joystick::isConnected(i)) return i;
