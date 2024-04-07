@@ -29,6 +29,7 @@ set(IMGUI_SOURCES
   ${IMGUI_INCLUDE_DIR}/imgui_tables.cpp
   ${IMGUI_INCLUDE_DIR}/imgui_widgets.cpp
   ${IMGUI_INCLUDE_DIR}/misc/cpp/imgui_stdlib.cpp
+  ${IMGUI_INCLUDE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
 set(IMGUI_DEMO_SOURCES

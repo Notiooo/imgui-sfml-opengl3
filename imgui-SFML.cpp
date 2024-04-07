@@ -1,5 +1,6 @@
 #include "imgui-SFML.h"
 #include <imgui.h>
+#include <backends/imgui_impl_opengl3.h>
 
 #include <SFML/Config.hpp>
 #include <SFML/Graphics/Color.hpp>
@@ -125,8 +126,6 @@ ImVec2 getDownRightAbsolute(const sf::FloatRect& rect);
 ImTextureID convertGLTextureHandleToImTextureID(GLuint glTextureHandle);
 GLuint convertImTextureIDToGLTextureHandle(ImTextureID textureID);
 
-void RenderDrawLists(ImDrawData* draw_data); // rendering callback function prototype
-
 // Default mapping is XInput gamepad mapping
 void initDefaultJoystickMapping();
 
@@ -214,15 +213,11 @@ WindowContext* s_currWindowCtx = nullptr;
 
 namespace ImGui {
 namespace SFML {
-bool Init(sf::RenderWindow& window, bool loadDefaultFont) {
-    return Init(window, window, loadDefaultFont);
+bool Init(sf::Window& window, const char* glsl_version, bool loadDefaultFont) {
+    return Init(window, sf::Vector2f(window.getSize()), glsl_version, loadDefaultFont);
 }
 
-bool Init(sf::Window& window, sf::RenderTarget& target, bool loadDefaultFont) {
-    return Init(window, sf::Vector2f(target.getSize()), loadDefaultFont);
-}
-
-bool Init(sf::Window& window, const sf::Vector2f& displaySize, bool loadDefaultFont) {
+bool Init(sf::Window& window, const sf::Vector2f& displaySize, const char* glsl_version, bool loadDefaultFont) {
     s_windowContexts.emplace_back(new WindowContext(&window));
 
     s_currWindowCtx = s_windowContexts.back().get();
@@ -256,7 +251,7 @@ bool Init(sf::Window& window, const sf::Vector2f& displaySize, bool loadDefaultF
     loadMouseCursor(ImGuiMouseCursor_ResizeNESW, sf::Cursor::SizeBottomLeftTopRight);
     loadMouseCursor(ImGuiMouseCursor_ResizeNWSE, sf::Cursor::SizeTopLeftBottomRight);
     loadMouseCursor(ImGuiMouseCursor_Hand, sf::Cursor::Hand);
-
+    ImGui_ImplOpenGL3_Init(glsl_version);
     if (loadDefaultFont) {
         // this will load default font automatically
         // No need to call AddDefaultFont
@@ -390,11 +385,7 @@ void ProcessEvent(const sf::Event& event) {
     }
 }
 
-void Update(sf::RenderWindow& window, sf::Time dt) {
-    Update(window, window, dt);
-}
-
-void Update(sf::Window& window, sf::RenderTarget& target, sf::Time dt) {
+void Update(sf::Window& window, sf::Time dt) {
     SetCurrentWindow(window);
     assert(s_currWindowCtx);
 
@@ -409,9 +400,9 @@ void Update(sf::Window& window, sf::RenderTarget& target, sf::Time dt) {
     if (!s_currWindowCtx->mouseMoved) {
         if (sf::Touch::isDown(0)) s_currWindowCtx->touchPos = sf::Touch::getPosition(0, window);
 
-        Update(s_currWindowCtx->touchPos, sf::Vector2f(target.getSize()), dt);
+        Update(s_currWindowCtx->touchPos, sf::Vector2f(window.getSize()), dt);
     } else {
-        Update(sf::Mouse::getPosition(window), sf::Vector2f(target.getSize()), dt);
+        Update(sf::Mouse::getPosition(window), sf::Vector2f(window.getSize()), dt);
     }
 }
 
@@ -464,25 +455,18 @@ void Update(const sf::Vector2i& mousePos, const sf::Vector2f& displaySize, sf::T
         updateJoystickAxisState(io);
     }
 
+    ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
 }
 
-void Render(sf::RenderWindow& window) {
+void Render(sf::Window& window) {
     SetCurrentWindow(window);
-    Render(static_cast<sf::RenderTarget&>(window));
-}
-
-void Render(sf::RenderTarget& target) {
-    target.resetGLStates();
-    target.pushGLStates();
-    ImGui::Render();
-    RenderDrawLists(ImGui::GetDrawData());
-    target.popGLStates();
+    Render();
 }
 
 void Render() {
     ImGui::Render();
-    RenderDrawLists(ImGui::GetDrawData());
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 void Shutdown(const sf::Window& window) {
@@ -507,6 +491,7 @@ void Shutdown(const sf::Window& window) {
             ImGui::SetCurrentContext(s_currWindowCtx->imContext);
         } else {
             // no alternatives...
+            ImGui_ImplOpenGL3_Shutdown();
             s_currWindowCtx = nullptr;
             ImGui::SetCurrentContext(nullptr);
         }
@@ -514,9 +499,9 @@ void Shutdown(const sf::Window& window) {
 }
 
 void Shutdown() {
+    ImGui_ImplOpenGL3_Shutdown();
     s_currWindowCtx = nullptr;
     ImGui::SetCurrentContext(nullptr);
-
     s_windowContexts.clear();
 }
 
@@ -818,175 +803,6 @@ GLuint convertImTextureIDToGLTextureHandle(ImTextureID textureID) {
     GLuint glTextureHandle = 0;
     std::memcpy(&glTextureHandle, &textureID, sizeof(GLuint));
     return glTextureHandle;
-}
-
-// copied from imgui/backends/imgui_impl_opengl2.cpp
-void SetupRenderState(ImDrawData* draw_data, int fb_width, int fb_height) {
-    // Setup render state: alpha-blending enabled, no face culling, no depth testing, scissor
-    // enabled, vertex/texcoord/color pointers, polygon fill.
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    // glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA); //
-    // In order to composite our output buffer we need to preserve alpha
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_STENCIL_TEST);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_COLOR_MATERIAL);
-    glEnable(GL_SCISSOR_TEST);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glEnable(GL_TEXTURE_2D);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    glShadeModel(GL_SMOOTH);
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-
-    // Setup viewport, orthographic projection matrix
-    // Our visible imgui space lies from draw_data->DisplayPos (top left) to
-    // draw_data->DisplayPos+data_data->DisplaySize (bottom right). DisplayPos is (0,0) for single
-    // viewport apps.
-    glViewport(0, 0, (GLsizei)fb_width, (GLsizei)fb_height);
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-#ifdef GL_VERSION_ES_CL_1_1
-    glOrthof(draw_data->DisplayPos.x, draw_data->DisplayPos.x + draw_data->DisplaySize.x,
-             draw_data->DisplayPos.y + draw_data->DisplaySize.y, draw_data->DisplayPos.y, -1.0f,
-             +1.0f);
-#else
-    glOrtho(draw_data->DisplayPos.x, draw_data->DisplayPos.x + draw_data->DisplaySize.x,
-            draw_data->DisplayPos.y + draw_data->DisplaySize.y, draw_data->DisplayPos.y, -1.0f,
-            +1.0f);
-#endif
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
-}
-
-// Rendering callback
-void RenderDrawLists(ImDrawData* draw_data) {
-    ImGui::GetDrawData();
-    if (draw_data->CmdListsCount == 0) {
-        return;
-    }
-
-    const ImGuiIO& io = ImGui::GetIO();
-    assert(io.Fonts->TexID != (ImTextureID) nullptr); // You forgot to create and set font texture
-
-    // Avoid rendering when minimized, scale coordinates for retina displays (screen coordinates !=
-    // framebuffer coordinates)
-    const int fb_width = (int)(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
-    const int fb_height = (int)(draw_data->DisplaySize.y * draw_data->FramebufferScale.y);
-    if (fb_width == 0 || fb_height == 0) return;
-    draw_data->ScaleClipRects(io.DisplayFramebufferScale);
-
-    // Backup GL state
-    // Backup GL state
-    GLint last_texture = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &last_texture);
-    GLint last_polygon_mode[2];
-    glGetIntegerv(GL_POLYGON_MODE, last_polygon_mode);
-    GLint last_viewport[4];
-    glGetIntegerv(GL_VIEWPORT, last_viewport);
-    GLint last_scissor_box[4];
-    glGetIntegerv(GL_SCISSOR_BOX, last_scissor_box);
-    GLint last_shade_model = 0;
-    glGetIntegerv(GL_SHADE_MODEL, &last_shade_model);
-    GLint last_tex_env_mode = 0;
-    glGetTexEnviv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, &last_tex_env_mode);
-
-#ifdef GL_VERSION_ES_CL_1_1
-    GLint last_array_buffer;
-    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &last_array_buffer);
-    GLint last_element_array_buffer;
-    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &last_element_array_buffer);
-#else
-    glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT | GL_TRANSFORM_BIT);
-#endif
-
-    // Setup desired GL state
-    SetupRenderState(draw_data, fb_width, fb_height);
-
-    // Will project scissor/clipping rectangles into framebuffer space
-    const ImVec2 clip_off = draw_data->DisplayPos; // (0,0) unless using multi-viewports
-    const ImVec2 clip_scale = draw_data->FramebufferScale; // (1,1) unless using retina display
-                                                           // which are often (2,2)
-
-    // Render command lists
-    for (int n = 0; n < draw_data->CmdListsCount; n++) {
-        const ImDrawList* cmd_list = draw_data->CmdLists[n];
-        const ImDrawVert* vtx_buffer = cmd_list->VtxBuffer.Data;
-        const ImDrawIdx* idx_buffer = cmd_list->IdxBuffer.Data;
-        glVertexPointer(2, GL_FLOAT, sizeof(ImDrawVert),
-                        (const GLvoid*)((const char*)vtx_buffer + IM_OFFSETOF(ImDrawVert, pos)));
-        glTexCoordPointer(2, GL_FLOAT, sizeof(ImDrawVert),
-                          (const GLvoid*)((const char*)vtx_buffer + IM_OFFSETOF(ImDrawVert, uv)));
-        glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(ImDrawVert),
-                       (const GLvoid*)((const char*)vtx_buffer + IM_OFFSETOF(ImDrawVert, col)));
-
-        for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
-            const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
-            if (pcmd->UserCallback) {
-                // User callback, registered via ImDrawList::AddCallback()
-                // (ImDrawCallback_ResetRenderState is a special callback value used by the user to
-                // request the renderer to reset render state.)
-                if (pcmd->UserCallback == ImDrawCallback_ResetRenderState)
-                    SetupRenderState(draw_data, fb_width, fb_height);
-                else
-                    pcmd->UserCallback(cmd_list, pcmd);
-            } else {
-                // Project scissor/clipping rectangles into framebuffer space
-                ImVec4 clip_rect;
-                clip_rect.x = (pcmd->ClipRect.x - clip_off.x) * clip_scale.x;
-                clip_rect.y = (pcmd->ClipRect.y - clip_off.y) * clip_scale.y;
-                clip_rect.z = (pcmd->ClipRect.z - clip_off.x) * clip_scale.x;
-                clip_rect.w = (pcmd->ClipRect.w - clip_off.y) * clip_scale.y;
-
-                if (clip_rect.x < static_cast<float>(fb_width) &&
-                    clip_rect.y < static_cast<float>(fb_height) && clip_rect.z >= 0.0f &&
-                    clip_rect.w >= 0.0f) {
-                    // Apply scissor/clipping rectangle
-                    glScissor((int)clip_rect.x, (int)(static_cast<float>(fb_height) - clip_rect.w),
-                              (int)(clip_rect.z - clip_rect.x), (int)(clip_rect.w - clip_rect.y));
-
-                    // Bind texture, Draw
-                    const GLuint textureHandle =
-                        convertImTextureIDToGLTextureHandle(pcmd->TextureId);
-                    glBindTexture(GL_TEXTURE_2D, textureHandle);
-                    glDrawElements(GL_TRIANGLES, (GLsizei)pcmd->ElemCount,
-                                   sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT,
-                                   idx_buffer + pcmd->IdxOffset);
-                }
-            }
-        }
-    }
-
-    // Restore modified GL state
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glBindTexture(GL_TEXTURE_2D, (GLuint)last_texture);
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glPopAttrib();
-    glPolygonMode(GL_FRONT, (GLenum)last_polygon_mode[0]);
-    glPolygonMode(GL_BACK, (GLenum)last_polygon_mode[1]);
-    glViewport(last_viewport[0], last_viewport[1], (GLsizei)last_viewport[2],
-               (GLsizei)last_viewport[3]);
-    glScissor(last_scissor_box[0], last_scissor_box[1], (GLsizei)last_scissor_box[2],
-              (GLsizei)last_scissor_box[3]);
-    glShadeModel((GLenum)last_shade_model);
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, last_tex_env_mode);
-
-#ifdef GL_VERSION_ES_CL_1_1
-    glBindBuffer(GL_ARRAY_BUFFER, last_array_buffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, last_element_array_buffer);
-    glDisable(GL_SCISSOR_TEST);
-#endif
 }
 
 unsigned int getConnectedJoystickId() {

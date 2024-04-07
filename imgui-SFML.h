@@ -33,11 +33,11 @@ class Window;
 
 namespace ImGui {
 namespace SFML {
-IMGUI_SFML_NODISCARD IMGUI_SFML_API bool Init(sf::RenderWindow& window,
-                                              bool loadDefaultFont = true);
-IMGUI_SFML_NODISCARD IMGUI_SFML_API bool Init(sf::Window& window, sf::RenderTarget& target,
+IMGUI_SFML_NODISCARD IMGUI_SFML_API bool Init(sf::Window& window,
+                                              const char* glsl_version = "#version 330",
                                               bool loadDefaultFont = true);
 IMGUI_SFML_NODISCARD IMGUI_SFML_API bool Init(sf::Window& window, const sf::Vector2f& displaySize,
+                                              const char* glsl_version = "#version 330",
                                               bool loadDefaultFont = true);
 
 IMGUI_SFML_API void SetCurrentWindow(const sf::Window& window);
@@ -46,13 +46,11 @@ IMGUI_SFML_API void SetCurrentWindow(const sf::Window& window);
 IMGUI_SFML_DEPRECATED IMGUI_SFML_API void ProcessEvent(const sf::Event& event);
 IMGUI_SFML_API void ProcessEvent(const sf::Window& window, const sf::Event& event);
 
-IMGUI_SFML_API void Update(sf::RenderWindow& window, sf::Time dt);
-IMGUI_SFML_API void Update(sf::Window& window, sf::RenderTarget& target, sf::Time dt);
+IMGUI_SFML_API void Update(sf::Window& window, sf::Time dt);
 IMGUI_SFML_API void Update(const sf::Vector2i& mousePos, const sf::Vector2f& displaySize,
                            sf::Time dt);
 
-IMGUI_SFML_API void Render(sf::RenderWindow& window);
-IMGUI_SFML_API void Render(sf::RenderTarget& target);
+IMGUI_SFML_API void Render(sf::Window& window);
 IMGUI_SFML_API void Render();
 
 IMGUI_SFML_API void Shutdown(const sf::Window& window);

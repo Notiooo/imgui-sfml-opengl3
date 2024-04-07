@@ -1,5 +1,6 @@
 ImGui-SFML
 ==========
+### This fork works only under Opengl3 and above. If you want to use it with Opengl2, please use the original repository!
 
 Library which allows you to use [Dear ImGui](https://github.com/ocornut/imgui) with [SFML](https://github.com/SFML/SFML)
 
@@ -10,7 +11,6 @@ Based on [this repository](https://github.com/Mischa-Alff/imgui-backends) with b
 State of Development
 -----
 
--   The [`master`](https://github.com/SFML/imgui-sfml/tree/master) branch contains work in progress supporting SFML 3. The SFML 3 API is not stable so this branch is not stable either.
 -   The [`2.6.x`](https://github.com/SFML/imgui-sfml/tree/2.6.x) branch contains work targeting SFML 2 and is thus stable.
 
 Dependencies
@@ -99,18 +99,24 @@ See example file [here](https://github.com/SFML/imgui-sfml/blob/master/examples/
 #include "imgui.h"
 #include "imgui-SFML.h"
 
-#include <SFML/Graphics/CircleShape.hpp>
-#include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Window.hpp> // Core profile does not support Graphic module :)
 #include <SFML/System/Clock.hpp>
 #include <SFML/Window/Event.hpp>
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode(640, 480), "ImGui + SFML = <3");
+    sf::ContextSettings settings;
+    settings.antialiasingLevel = 0;
+    settings.majorVersion = 3;
+    settings.minorVersion = 3;
+    settings.depthBits = 24;
+    settings.stencilBits = 8;
+    settings.attributeFlags = sf::ContextSettings::Core;
+    
+    sf::RenderWindow window(sf::VideoMode(640, 480), "ImGui + SFML + OpenGL3 = <3", settings);
     window.setFramerateLimit(60);
     ImGui::SFML::Init(window);
 
-    sf::CircleShape shape(100.f);
-    shape.setFillColor(sf::Color::Green);
+    // prepare something to draw :)
 
     sf::Clock deltaClock;
     while (window.isOpen()) {
@@ -132,7 +138,9 @@ int main() {
         ImGui::End();
 
         window.clear();
-        window.draw(shape);
+        
+        // draw your shape there c:
+        
         ImGui::SFML::Render(window);
         window.display();
     }
@@ -140,6 +148,11 @@ int main() {
     ImGui::SFML::Shutdown();
 }
 ```
+
+Glsl versions how-to
+---
+Default `#version 330` is loaded if you don't pass different one in `ImGui::SFML::Init`. Call `ImGui::SFML::Init(window, glsl_version);` if you want different one.
+
 
 Fonts how-to
 ---
@@ -206,6 +219,8 @@ ImGui::ImageButton(const sf::Texture& texture);
 ImGui::ImageButton(const sf::RenderTexture& texture);
 ```
 
+### But please remember that Core Profile does not support SFML Graphics module.
+
 A note about sf::RenderTexture
 ---
 
@@ -230,6 +245,7 @@ ImGui::Image(sprite); // the texture is displayed properly
 ```
 
 For more notes see [this issue](https://github.com/SFML/imgui-sfml/issues/35).
+### But please remember that Core Profile does not support SFML Graphics module.
 
 Mouse cursors
 ---
